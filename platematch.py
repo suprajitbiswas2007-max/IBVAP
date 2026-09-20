@@ -1,24 +1,4 @@
-"""
-platematch.py — Real-time ALPR (Indian plates) + vehicle speed estimation
 
-Pipeline
-  1. YOLOv8n  (yolov8n.pt)  .track()  -> vehicles + speed (EMA-smoothed, dead-zone)
-  2. Custom   (best.pt)     .track()  -> plates
-  3. Plate crops go to ONE background OCR thread (EasyOCR) through a queue,
-     so the video loop never blocks on OCR.
-  4. OCR text -> regex/positional clean-up -> fuzzy match vs MySQL plates.
-  5. IoU "spatial memory" lets a new YOLO track ID inherit a plate that was
-     already recognised at the same spot (YOLO often re-issues IDs).
-
-Run:      python platematch.py          (press q in the window to quit)
-Flask:    from platematch import generate_frames   (MJPEG generator)
-
-Environment variables (all optional)
-  ALPR_PLATE_MODEL   full path to best.pt
-  ALPR_VIDEO         video file path, RTSP/HTTP URL, or a webcam index like 0
-  ALPR_DB_HOST / ALPR_DB_USER / ALPR_DB_PASSWORD / ALPR_DB_NAME
-  ALPR_DEBUG         set to 1 to print raw OCR reads and save plate crops to ./debug_crops
-"""
 
 import math
 import os
