@@ -8,13 +8,12 @@ import threading
 from collections import defaultdict, Counter
 from ultralytics import YOLO
 
-# MODEL INITIALIZATION
 face_model = YOLO("yolov8n-face-lindevs.pt")
 face_model.to('cuda')
 person_model = YOLO("yolov8s.pt")
 person_model.to('cuda')
 
-# RESTRICTED ZONE DEFINITION
+
 restrictedzone = np.array([[213, 160], [427, 160], [427, 320], [213, 320]])
 
 def isinsidezone(center, zone):
@@ -50,17 +49,12 @@ def pad_face_crop(crop, frame, x1, y1, x2, y2, pad_ratio=0.25):
     return frame[max(0, y1 - pad_y):min(fh, y2 + pad_y), max(0, x1 - pad_x):min(fw, x2 + pad_x)]
 
 def is_lower_face_obscured(face_crop):
-
     h, w = face_crop.shape[:2]
     if h < 40 or w < 40: return False
     
-    # Isolate the bottom 50% of the face (nose and mouth region)
     lower_half = face_crop[int(h * 0.5):h, :]
     gray_lower = cv2.cvtColor(lower_half, cv2.COLOR_BGR2GRAY)
-    
-
     contrast_score = np.std(gray_lower)
-
     
     return contrast_score < 12.2
 
@@ -95,7 +89,8 @@ matching_in_progress = set()
 match_semaphore = threading.Semaphore(4)
 
 track_labels = {}
-person_no_face_frames={}
+track_frame_count = defaultdict(int)
+person_no_face_frames = {}
 track_vote_history = defaultdict(list)
 live_alerts = []
 logged_unknown_appearances = set()
@@ -103,6 +98,7 @@ logged_unknown_appearances = set()
 def async_match_face(track_id, person_crop):
     if track_id in matching_in_progress: return
     matching_in_progress.add(track_id)
+    
     def worker():
         with match_semaphore:
             matched_name, distance = match_face(person_crop)
@@ -111,13 +107,16 @@ def async_match_face(track_id, person_crop):
                 track_vote_history[track_id].append(matched_name)
                 if len(track_vote_history[track_id]) > 7:
                     track_vote_history[track_id] = track_vote_history[track_id][-7:]
+                
                 name_votes = [v for v in track_vote_history[track_id] if v != "Unknown"]
                 if name_votes:
                     top_name, top_count = Counter(name_votes).most_common(1)[0]
                     if top_count >= 1:
                         track_labels[track_id] = top_name
                 else:
-                    track_labels[track_id] = "Unknown"
+                    # Confirm "Unknown" only after accumulated recognition attempts
+                    if len(track_vote_history[track_id]) >= 2:
+                        track_labels[track_id] = "Unknown"
             
             # Log single instance of unknown person appearance once confirmed
             if track_labels.get(track_id) == "Unknown" and track_id not in logged_unknown_appearances:
@@ -151,7 +150,7 @@ def generate_frames():
         small_frame = cv2.resize(frame, (int(frame.shape[1] * 0.75), int(frame.shape[0] * 0.75)))
         scale_x, scale_y = frame.shape[1] / small_frame.shape[1], frame.shape[0] / small_frame.shape[0]
 
-        # 1. TRACK PERSONS (Now using .track instead of standard inference)
+        # 1. TRACK PERSONS
         person_results = person_model.track(small_frame, persist=True, tracker="bytetrack.yaml", verbose=False, device=0)[0]
         person_data = []
         
@@ -164,9 +163,9 @@ def generate_frames():
                         'box': (px1, py1, px2, py2),
                         'scaled_box': (int(px1*scale_x), int(py1*scale_y), int(px2*scale_x), int(py2*scale_y))
                     })
-                    ##Person Box
                     cv2.rectangle(frame, (int(px1*scale_x), int(py1*scale_y)), (int(px2*scale_x), int(py2*scale_y)), (255, 255, 0), 2)
 
+        # 2. TRACK FACES
         face_results = face_model.track(small_frame, persist=True, tracker="bytetrack.yaml", verbose=False, device=0)[0]
         face_centers = []
         
@@ -177,28 +176,30 @@ def generate_frames():
                 track_id = int(tid)
                 fx1, fy1, fx2, fy2 = map(int, box.xyxy[0])
                 
-                # Store face center for geometric matching (using unscaled coordinates)
                 face_centers.append(((fx1 + fx2) // 2, (fy1 + fy2) // 2))
-                
                 fx1, fy1, fx2, fy2 = int(fx1*scale_x), int(fy1*scale_y), int(fx2*scale_x), int(fy2*scale_y)
                 
+                # Initialize state to 'Scanning...' instead of 'Unknown'
                 if track_id not in track_labels: 
-                    track_labels[track_id] = "Unknown"
+                    track_labels[track_id] = "Scanning..."
                 
+                track_frame_count[track_id] += 1
                 raw_crop = frame[fy1:fy2, fx1:fx2]
                 
-                # Check if it is Unknown OR if it was previously Obscured
-                if track_labels[track_id] in ["Unknown", "OBSCURED"]:
+                # Check recognition status
+                if track_labels[track_id] in ["Scanning...", "Unknown", "OBSCURED"]:
                     if raw_crop.size > 0 and is_lower_face_obscured(raw_crop):
                         track_labels[track_id] = "OBSCURED"
                     else:
-                        # Mask is off. Reset to Unknown and trigger DeepFace recognition
                         if track_labels[track_id] == "OBSCURED":
-                            track_labels[track_id] = "Unknown" 
-                        async_match_face(track_id, pad_face_crop(raw_crop, frame, fx1, fy1, fx2, fy2, pad_ratio=0.25).copy())
+                            track_labels[track_id] = "Scanning..." 
+                        
+                        # Request asynchronous matching if votes are still needed
+                        if len(track_vote_history[track_id]) < 5:
+                            async_match_face(track_id, pad_face_crop(raw_crop, frame, fx1, fy1, fx2, fy2, pad_ratio=0.25).copy())
 
                 label = track_labels[track_id]
-                cx,cy= int((fx1 + fx2) / 2), int((fy1 + fy2) / 2)
+                cx, cy = int((fx1 + fx2) / 2), int((fy1 + fy2) / 2)
                 in_zone = (
                     isinsidezone((cx, cy), restrictedzone) or    
                     isinsidezone((fx1, fy1), restrictedzone) or   
@@ -206,18 +207,24 @@ def generate_frames():
                     isinsidezone((fx1, fy2), restrictedzone) or    
                     isinsidezone((fx2, fy2), restrictedzone)      
                 )
-                # Update status and color rendering
+                
+                # Determine display status & colors
                 if label == "OBSCURED":
                     status, color = ("MASK/COVER DETECTED", (0, 0, 255))
                     alert_msg = f"SECURITY ALERT: Obscured Face (ID {track_id})"
                     timestamp = datetime.now().strftime("%H:%M:%S")
                     if not any(a['id'] == f"obscured_{track_id}" for a in live_alerts):
                         live_alerts.insert(0, {"time": timestamp, "msg": alert_msg, "id": f"obscured_{track_id}"})
+                elif label == "Scanning...":
+                    status, color = ("Verifying Identity...", (255, 255, 0))
                 else:
-                    status, color = ("", (0, 165, 255) if label == "Unknown" else (0, 255, 0))
+                    color = (0, 165, 255) if label == "Unknown" else (0, 255, 0)
+                    status = ""
                     if in_zone:
-                        status, color = ("Access Granted", (0, 255, 0)) if label != "Unknown" else ("INTRUSION DETECTED", (0, 0, 255))
-                        if status == "INTRUSION DETECTED":
+                        if label != "Unknown":
+                            status, color = ("Access Granted", (0, 255, 0))
+                        else:
+                            status, color = ("INTRUSION DETECTED", (0, 0, 255))
                             alert_msg = f"SECURITY BREACH: Unauthorized Subject (ID {track_id})"
                             timestamp = datetime.now().strftime("%H:%M:%S")
                             if not any(a['id'] == track_id and a['time'] == timestamp for a in live_alerts):
@@ -228,7 +235,7 @@ def generate_frames():
                 if status:
                     cv2.putText(frame, status, (fx1, fy2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-        # MASK/OBSCURED
+        # 3. CHECK OBSCURED / COVERED PERSONS
         for p in person_data:
             p_id = p['id']
             px1, py1, px2, py2 = p['box']
@@ -236,31 +243,25 @@ def generate_frames():
             
             has_face = False
             for (fcx, fcy) in face_centers:
-                # Check if face center is inside the person's bounding box (specifically the upper 60% of the body)
                 if px1 <= fcx <= px2 and py1 <= fcy <= (py1 + int((py2 - py1) * 0.6)):
                     has_face = True
                     break
                     
             if not has_face:
                 person_no_face_frames[p_id] = person_no_face_frames.get(p_id, 0) + 1
-                # Trigger alert if no face is detected for ~15 consecutive frames (approx 1-2 seconds)
                 if person_no_face_frames[p_id] == 15:
                     alert_msg = f"SUSPICIOUS: Obscured/Covered Face (Person ID {p_id})"
                     timestamp = datetime.now().strftime("%H:%M:%S")
                     live_alerts.insert(0, {"time": timestamp, "msg": alert_msg, "id": f"obscured_{p_id}"})
                     print(f"[{timestamp}] ALERT: {alert_msg}")
                 
-                # Draw a warning on the person box
                 if person_no_face_frames[p_id] > 10:
                     cv2.putText(frame, "FACE OBSCURED", (spx1, spy1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
                     cv2.rectangle(frame, (spx1, spy1), (spx2, spy2), (0, 0, 255), 2)
             else:
                 person_no_face_frames[p_id] = 0
 
-        # Encode the frame as a JPEG
         ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-        
-        # Yield the frame in the multipart format required by web browsers
         yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 
     cap.release()
