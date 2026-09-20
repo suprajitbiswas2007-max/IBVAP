@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IBVAP | TACTICAL SURVEILLANCE FEED</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: #06090a;
+            color: #00ff66;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* NAVBAR (Unchanged) */
+        .navbar {
+            height: 50px; background: #0c1214; border-bottom: 2px solid #1a2a22;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px; flex-shrink: 0; 
+        }
+        .brand { font-size: 18px; font-weight: bold; color: #fff; letter-spacing: 2px; }
+        .sys-info { font-size: 12px; color: #ffcc00; display: flex; gap: 20px; }
+        .logout-btn { color: #ff3344; text-decoration: none; font-size: 12px; border: 1px solid #ff3344; padding: 5px 12px; }
+        .logout-btn:hover { background: #ff3344; color: #000; }
+
+        /* WORKSPACE LAYOUT - MODIFIED FOR SPLIT SCREEN */
+        .workspace { 
+            flex: 1; display: flex; flex-direction: column; padding: 15px; gap: 15px; overflow: hidden; 
+        }
+
+        .video-container {
+            flex: 2; /* Takes up 2/3 of the vertical space */
+            display: flex;
+            gap: 15px;
+            min-height: 0;
+        }
+
+        .feed-panel {
+            flex: 1; /* Both feeds take equal horizontal space */
+            background: #000; border: 1px solid #1a3a2a; position: relative;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        .feed-label {
+            position: absolute; top: 15px; background: rgba(0,0,0,0.7);
+            padding: 2px 8px; font-size: 12px; color: #00ff66; border: 1px solid #00ff66;
+            z-index: 10;
+        }
+
+        .feed-panel img { width: 100%; height: 100%; object-fit: contain; }
+
+        .reticle-corner { position: absolute; width: 20px; height: 20px; border: 2px solid #00ff66; z-index: 5;}
+        .tl { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+        .tr { top: 10px; right: 10px; border-left: none; border-bottom: none; }
+        .bl { bottom: 10px; left: 10px; border-right: none; border-top: none; }
+        .br { bottom: 10px; right: 10px; border-left: none; border-top: none; }
+
+        /* LOG PANEL - MOVED TO BOTTOM */
+        .side-panel {
+            flex: 1; /* Takes bottom 1/3 of space */
+            background: #090e10; border: 1px solid #1a2a22;
+            display: flex; flex-direction: column; padding: 15px; min-height: 0;
+        }
+
+        .panel-header {
+            font-size: 14px; color: #ff3344; border-bottom: 1px solid #ff3344;
+            padding-bottom: 8px; margin-bottom: 15px; letter-spacing: 1px; flex-shrink: 0;
+        }
+
+        /* Grid layout for alerts to use wide space efficiently */
+        .alerts-scroll { 
+            flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); 
+            gap: 10px; padding-right: 5px; align-content: start;
+        }
+
+        .alert-card {
+            background: rgba(255, 51, 68, 0.08); border-left: 3px solid #ff3344;
+            padding: 10px; font-size: 12px; height: fit-content;
+        }
+
+        .alert-time { color: #ffcc00; font-weight: bold; margin-bottom: 4px; }
+        .alert-msg { color: #d0e0d5; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #090e10; }
+        ::-webkit-scrollbar-thumb { background: #1a3a2a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00ff66; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="brand">IBVAP // SYSTEM MONITORING STATION</div>
+        <div class="sys-info">
+            <span>LOCATION: MULTI-CAM</span>
+            <span id="clock">00:00:00 UTC</span>
+            <span style="color: #00ff66;">DEFCON-4</span>
+        </div>
+        <a href="/logout" class="logout-btn">TERMINATE SESSION</a>
+    </div>
+
+    <div class="workspace">
+        <div class="video-container">
+            <!-- Left Panel: Face Tracking -->
+            <div class="feed-panel">
+                <div class="feed-label">CAM 01 // FACE ANALYTICS</div>
+                <div class="reticle-corner tl"></div><div class="reticle-corner tr"></div>
+                <div class="reticle-corner bl"></div><div class="reticle-corner br"></div>
+                <img src="{{ url_for('stream_faces') }}" alt="FACE STREAM">
+            </div>
+            
+            <!-- Right Panel: Plate Tracking -->
+            <div class="feed-panel">
+                <div class="feed-label">CAM 02 // VEHICLE ANPR</div>
+                <div class="reticle-corner tl"></div><div class="reticle-corner tr"></div>
+                <div class="reticle-corner bl"></div><div class="reticle-corner br"></div>
+                <img src="{{ url_for('stream_plates') }}" alt="PLATE STREAM">
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <div class="panel-header">LIVE INCIDENT LOGS (SYNCHRONIZED FEED)</div>
+            <div class="alerts-scroll" id="alerts-list"></div>
+        </div>
+    </div>
+
+    <script>
+        function updateClock() { document.getElementById('clock').innerText = new Date().toUTCString().split(' ')[4] + ' UTC'; }
+        setInterval(updateClock, 1000);
+
+        let previousAlertCount = 0;
+        let lastAlertTime = "";
+
+        function fetchAlerts() {
+            fetch('/get_alerts')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.length > 0 && data[0].time !== lastAlertTime) {
+                        const list = document.getElementById('alerts-list');
+                        list.innerHTML = '';
+                        data.forEach(alert => {
+                            list.innerHTML += `
+                                <div class="alert-card">
+                                    <div class="alert-time">[${alert.time}] ALERT LOGGED</div>
+                                    <div class="alert-msg">${alert.msg}</div>
+                                </div>
+                            `;
+                        });
+                        lastAlertTime = data[0].time;
+                    }
+                })
+                .catch(err => console.error("Polling error: ", err));
+        }
+        setInterval(fetchAlerts, 1000);
+    </script>
+</body>
+</html>

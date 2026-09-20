@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IBVAP | SECURE COMMAND ACCESS</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: #080b0c;
+            color: #00ff66;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            background-image: radial-gradient(rgba(0, 255, 102, 0.1) 1px, transparent 0);
+            background-size: 24px 24px;
+        }
+
+        .login-card {
+            width: 420px;
+            background: rgba(12, 18, 16, 0.95);
+            border: 2px solid #00ff66;
+            box-shadow: 0 0 25px rgba(0, 255, 102, 0.2);
+            padding: 35px;
+            position: relative;
+        }
+
+        .login-card::before {
+            content: "DEFENSE NET // CLEARANCE REQUIRED";
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: #080b0c;
+            padding: 0 8px;
+            font-size: 11px;
+            color: #ffcc00;
+            letter-spacing: 1px;
+        }
+
+        h2 { text-align: center; margin-bottom: 25px; letter-spacing: 2px; color: #fff; text-shadow: 0 0 8px #00ff66; }
+        
+        .field { margin-bottom: 20px; }
+        label { display: block; font-size: 12px; margin-bottom: 6px; color: #88a090; }
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #040607;
+            border: 1px solid #1a3a2a;
+            color: #00ff66;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            outline: none;
+        }
+        input:focus { border-color: #00ff66; box-shadow: 0 0 10px rgba(0, 255, 102, 0.3); }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #00ff66;
+            color: #000;
+            font-weight: bold;
+            font-family: 'Share Tech Mono', monospace;
+            border: none;
+            cursor: pointer;
+            letter-spacing: 2px;
+            transition: all 0.2s ease;
+        }
+        button:hover { background: #ffcc00; box-shadow: 0 0 15px rgba(255, 204, 0, 0.4); }
+
+        .footer-status { margin-top: 20px; font-size: 10px; color: #4a6352; display: flex; justify-content: space-between; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h2>IBVAP COMMAND</h2>
+        <form action="/login" method="POST">
+            <div class="field">
+                <label>[ OPERATOR IDENT ]</label>
+                <input type="text" name="username" placeholder="OFFICER ID" autocomplete="off" required>
+            </div>
+            <div class="field">
+                <label>[ CLEARANCE PASSCODE ]</label>
+                <input type="password" name="password" placeholder="PASSCODE" required>
+            </div>
+            <button type="submit">AUTHENTICATE ACCESS</button>
+        </form>
+        <div class="footer-status">
+            <span>SYS STATUS: ACTIVE</span>
+            <span>ENCRYPTION: AES-256</span>
+        </div>
+    </div>
+</body>
+</html>
