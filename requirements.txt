@@ -1,0 +1,10 @@
+opencv-python
+numpy
+ultralytics
+easyocr
+flask
+mysql-connector-python
+pytesseract
+deepface
+datetime
+collections
