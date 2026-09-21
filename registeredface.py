@@ -3,20 +3,14 @@ import mysql.connector
 import json
 
 conn = mysql.connector.connect(
-    host="localhost", user="root", password="idkanymore", database="ibvap"
+    host="", user="", password="", database="" #ADD YOUR OWN DATABASE
 )
 cursor = conn.cursor()
 
-people = {
-    "Suprajit": [
-        r"C:\Programming\SIH\webcam_reg_1.jpg",
-        r"C:\Programming\SIH\webcam_reg_2.jpg",
-        r"C:\Programming\SIH\webcam_reg_3.jpg",
-        r"C:\Programming\SIH\webcam_reg_4.jpg",
-        r"C:\Programming\SIH\webcam_reg_5.jpg",
-        r"C:\Programming\SIH\webcam_reg_6.jpg",
-        r"C:\Programming\SIH\webcam_reg_7.jpg"
-
+people = {                  #ADD THE IMAGE PATHS OF IMAGES TAKEN FROM camertest.py
+    "NAME": [
+        r"path1.mp4",
+        r"path2.mp4
     ]
 }
 
