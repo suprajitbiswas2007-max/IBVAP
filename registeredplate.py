@@ -1,6 +1,6 @@
 import mysql.connector
 conn = mysql.connector.connect(
-    host="localhost", user="root", password="idkanymore", database="ibvapplate"
+    host="", user="", password="", database=""   #ADD YOUR OWN DATABASE
 )
 cursor = conn.cursor()
 
@@ -13,8 +13,9 @@ CREATE TABLE IF NOT EXISTS platess (
 )
 """)
 
-plates = {
-    "Vivek": "JH01EE0183"
+plates = {                           #ADD YOUR OWN PLATES
+    "NAME": "WB06B1428",
+    "NAME1": "RJ27BE7084
 }
 
 for owner_name, plate_number in plates.items():
