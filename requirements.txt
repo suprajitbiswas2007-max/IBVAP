@@ -1,12 +1,43 @@
-opencv-python
-numpy
-ultralytics
-easyocr
-flask
-mysql-connector-python
-pytesseract
-deepface
-datetime
-collections
-tf-keras
-cryptography
+# =============================================================================
+# IBVAP - GPU (NVIDIA / CUDA) requirements
+# Scanned from: platematch.py, facematching.py, app.py, platetraining.py,
+#               registeredface.py, registeredplate.py
+# Version floors follow the set your Hugging Face build resolved on Python 3.12 (not re-resolved here).
+#
+#   pip install -r requirements.txt
+#   python -c "import torch; print(torch.cuda.is_available(), torch.version.cuda)"
+#
+# ALWAYS run the check above: if the CUDA index below has no matching wheel, pip
+# silently falls back to the CPU build from PyPI and prints nothing.
+# For a CPU-only server / Docker image use requirements-cpu.txt instead.
+# =============================================================================
+
+# --- PyTorch with CUDA (YOLO detection/tracking/training + EasyOCR) ----------
+# Keep ONE index line. Run `nvidia-smi`: the top-right "CUDA Version" is the
+# highest your driver supports. RTX 50-series needs cu130 (or a cu128+ build).
+--extra-index-url https://download.pytorch.org/whl/cu126
+# --extra-index-url https://download.pytorch.org/whl/cu130
+torch
+torchvision
+
+# --- Detection / tracking / OCR ----------------------------------------------
+ultralytics>=8.4              # YOLOv8: platematch, facematching, platetraining
+easyocr>=1.7.2                # plate OCR (runs on the GPU through PyTorch)
+opencv-python>=4.8            # desktop build. On a server use opencv-python-headless INSTEAD - never both
+numpy>=1.26
+
+# --- Face recognition (facematching.py, registeredface.py) -------------------
+deepface[tensorflow]>=0.0.101 # ArcFace embeddings
+tf-keras                      # DeepFace needs it with Keras 3
+# TensorFlow GPU works on Linux / WSL2 only (native Windows TF > 2.10 is CPU-only,
+# which is fine for one ArcFace crop at a time). On Linux/WSL2 uncomment:
+# tensorflow[and-cuda]
+# If TensorFlow uses the GPU, stop it reserving all VRAM (YOLO/EasyOCR need some):
+#   Windows: set TF_FORCE_GPU_ALLOW_GROWTH=true      Linux: export TF_FORCE_GPU_ALLOW_GROWTH=true
+
+# --- Database (platematch, facematching, registeredface, registeredplate) ----
+mysql-connector-python>=8.0
+
+# --- Web app (app.py) --------------------------------------------------------
+Flask>=3.0
+cryptography>=42              # Fernet log encryption
