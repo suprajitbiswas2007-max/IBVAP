@@ -3,9 +3,19 @@ import mysql.connector
 import json
 
 conn = mysql.connector.connect(
-    host="", user="", password="", database="" #ADD YOUR OWN DATABASE
+    host="", user="", password="", database="" #ADD YOUR OWN password,user root
 )
 cursor = conn.cursor()
+
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS faces (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    ENCODING TEXT NOT NULL,
+    registered_on DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+""")
 
 people = {                  #ADD THE IMAGE PATHS OF IMAGES TAKEN FROM camertest.py
     "NAME": [
