@@ -8,3 +8,5 @@ pytesseract
 deepface
 datetime
 collections
+tf-keras
+cryptography
