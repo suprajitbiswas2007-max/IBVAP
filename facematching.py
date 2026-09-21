@@ -21,7 +21,7 @@ def isinsidezone(center, zone):
 
 def load_known_faces():
     try:
-        conn = mysql.connector.connect(host="localhost", user="root", password="idkanymore", database="ibvap")
+        conn = mysql.connector.connect(host="", user="", password="", database="") # ADD YOUR OWN DATABASE HERE
         cursor = conn.cursor()
         cursor.execute("SELECT name, encoding FROM faces")
         rows = cursor.fetchall()
@@ -132,7 +132,7 @@ def async_match_face(track_id, person_crop):
     threading.Thread(target=worker, daemon=True).start()
 
 def generate_frames():
-    source = 0
+    source = 0 #THE WEBCAM SOURCE or ADD YOUR OWN SOURCE
     cap = cv2.VideoCapture(source)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
