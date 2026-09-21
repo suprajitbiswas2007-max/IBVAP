@@ -1,5 +1,3 @@
-
-
 import math
 import os
 import queue
@@ -21,14 +19,14 @@ from ultralytics import YOLO
 
 BASE_DIR = Path(__file__).resolve().parent
 
-MODEL_PATH = Path(r"C:\Programming\SIH\runs\detect\indian_plate_detector-4\weights\best.pt")
+MODEL_PATH = Path(r"") #ADD THE best.pt FILE PATH
 
 _local_vehicle = BASE_DIR / "yolov8n.pt"
 VEHICLE_MODEL_PATH = str(_local_vehicle) if _local_vehicle.exists() else "yolov8n.pt"
 
 _env_video = os.environ.get("ALPR_VIDEO")
 if _env_video is None:
-    VIDEO_SOURCE = Path(r"C:\Programming\SIH\VID_20260905_140217112.mp4")
+    VIDEO_SOURCE = Path(r"") #ADD THE VIDEO YOU WANT TO SCAN NP FOR
 elif _env_video.isdigit():
     VIDEO_SOURCE = int(_env_video)       
 else:
@@ -189,9 +187,7 @@ def normalize_plate(raw):
                         fixed, swaps = _fit(seg, d, s, k)
                         if fixed is None or not PLATE_RE.fullmatch(fixed):
                             continue
-                        # 1-digit districts are rare (Delhi "DL1C..." is the main case), so a
-                        # 1-digit reading must beat a 2-digit one by a clear margin. This stops
-                        # "JH0IEN0030" being parsed as district "0" + series "IEN".
+                       
                         prior = 1.5 if (d == 1 and fixed[:2] != "DL") else 0.0
                         cand = (swaps + strip_cost + prior, -len(fixed), fixed)
                         if best is None or cand < best:
@@ -219,7 +215,6 @@ def _read_line(img):
         return "", 0.0
 
     # Drop small-text boxes. The blue "IND" strip / hologram on HSRP plates is much
-    # shorter than the registration characters and otherwise leaks junk such as "EJH01...".
     heights = [max(p[1] for p in r[0]) - min(p[1] for p in r[0]) for r in results]
     tallest = max(heights)
     if DEBUG:
@@ -317,15 +312,7 @@ def _substring_distance(pattern, text):
 
 
 def fuzzy_match_known_plate(candidates, known, threshold=FUZZY_THRESHOLD, substring=False):
-    """
-    STRICT match of OCR text against registered plates. -> (plate, owner, ratio) or (None, None, 0.0)
-
-    A plate is accepted only if it is within MAX_EDITS characters of a DB plate (one misread
-    character). A loose ratio alone is not enough: on 10-character plates a ratio of 0.72 lets
-    a *different* vehicle match (JH01EE0030 vs JH01EE0183 scores 0.80 with only the
-    number block wrong). If two DB plates are equally close, the read is ambiguous -> no match.
-    substring=True is used for raw OCR text that failed to parse (may contain IND-strip junk).
-    """
+   
     best = None                                   # (edits, -ratio, plate, owner)
     ambiguous = False
     for cand in candidates:
@@ -371,18 +358,9 @@ def pad_plate_crop(frame, x1, y1, x2, y2, pad_ratio=0.18):
     return frame[max(0, y1 - py): min(fh, y2 + py), max(0, x1 - px): min(fw, x2 + px)]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SHARED STATE  (everything below is guarded by state_lock)
-# ─────────────────────────────────────────────────────────────────────────────
+
 state_lock = threading.Lock()
 
-# plate_tracks[track_id] = {
-#   "status":  "scanning" | "matched" | "unknown",
-#   "label":   text shown on screen,
-#   "done":    True once we stop OCR-ing this plate,
-#   "votes":   recent OCR reads, "attempts": number of reads,
-#   "box":     last (x1,y1,x2,y2), "last_seen": time of last detection }
-# This dict doubles as the IoU "spatial memory".
 plate_tracks = {}
 pending_tracks = set()      # track IDs currently queued / being OCR-ed
 live_alerts = []            # newest first, max 50
@@ -422,19 +400,7 @@ def iou(a, b):
 
 
 def _find_inherited_locked(track_id, box, now, active_ids):
-    """
-    IoU TRACKING / SPATIAL MEMORY
-    -----------------------------
-    YOLO sometimes loses a plate and re-issues it under a new ID (2 -> 7). The
-    plate hasn't moved, so if a *different* track that we already fully
-    recognised was seen here a moment ago (IoU >= IOU_THRESH, within
-    MEMORY_TTL seconds), the new ID inherits its label immediately instead of
-    being re-scanned.
 
-    The donor must be ABSENT from the current frame (`active_ids`). If its ID is still
-    being detected, the two boxes are two different plates, not one plate with a new ID,
-    so it must not lend its label. Caller must hold state_lock.
-    """
     best_iou, best_tid, best = 0.0, None, None
     for tid, rec in plate_tracks.items():
         if tid == track_id or tid in active_ids or not rec["done"]:
@@ -538,11 +504,7 @@ def _register_read(track_id, text, now):
 
 
 def _register_unparsed(track_id, raw):
-    """
-    OCR text that doesn't fit the plate pattern. Still try it against the DB (this
-    rescues plates where the IND strip or one bad character broke the parse), and
-    count the failure so a hopeless plate is flagged instead of scanning silently forever.
-    """
+  
     db_plate = owner = None
     if len(raw) >= 6:
         db_plate, owner, _ = fuzzy_match_known_plate([raw], known_plates, substring=True)
